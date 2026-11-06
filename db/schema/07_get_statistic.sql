@@ -39,10 +39,10 @@ begin
      order by o.restaurant_id, count(*) desc
   )
   select r.restaurant_name,
-    	 bp.best_product_name,
-	     coalesce(os.total_amount, 0),
-	     coalesce(os.avg_amount, 0),
-	     bc.best_user
+         bp.best_product_name,
+         coalesce(os.total_amount, 0),
+         coalesce(os.avg_amount, 0),
+         bc.best_user
     from restaurant r
       left join ord_stats os on r.restaurant_id = os.restaurant_id
       left join best_prod bp on r.restaurant_id = bp.restaurant_id
