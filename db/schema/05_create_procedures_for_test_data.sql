@@ -11,6 +11,7 @@ create or replace procedure erase_test_data()
 as $$
 begin
   truncate table
+    review_photo,
     review,
     payment,
     order_structure,
@@ -49,6 +50,8 @@ declare
   rest_id$u uuid;
   order_id$u uuid;
   prod_id$u uuid;
+  review_id$u uuid;
+  curr_num$i int;
 
   clients$u uuid[] := array[]::uuid[];
   couriers$u uuid[] := array[]::uuid[];
@@ -201,17 +204,20 @@ begin
   -- 5. рестораны
   for i$i in 1..val$i loop
     rest_id$u := exts.uuid_generate_v4();
+    curr_num$i := nextval('seq_restaurant_num');
     insert into restaurant (
       restaurant_id, restaurant_name, address_id, description,
-      work_start, work_end, company_details, rating, status
+      work_start, work_end, inn, ogrn, bank_account, rating, status
     ) values (
       rest_id$u,
-      'ресторан ' || nextval('seq_restaurant_num')::text,
+      'ресторан ' || curr_num$i::text,
       rest_addrs$u[i$i],
       'описание ресторана',
       time '09:00:00',
       time '23:00:00',
-      'инн ' || lpad(floor(random() * 8999999999 + 1000000000)::bigint::text, 10, '0') || ', огрн 1234567890123',
+      '77' || lpad(curr_num$i::text, 8, '0'),
+      '10277' || lpad(curr_num$i::text, 8, '0'),
+      '40702810' || lpad(curr_num$i::text, 12, '0'),
       null,
       enums_restaurant_status$c[1]
     );
@@ -319,33 +325,55 @@ begin
     );
 
     -- отзыв
+    review_id$u := exts.uuid_generate_v4();
     if j$i % 2 = 1 then
       insert into review (
-        review_id, client_id, order_id, review_timestamp, entity_id, entity_type, description, photo_url, rating
+        review_id, client_id, order_id, review_timestamp, entity_id, entity_type, description, rating
       ) values (
-        exts.uuid_generate_v4(),
+        review_id$u,
         cur_client$u,
         order_id$u,
         order_ts$t + interval '1 hour',
         dish1$u,
         enums_review_type$c[1],
         'отличное блюдо, вкусно!',
-        null,
         (3.0 + (j$i % 3))
       );
     else
       insert into review (
-        review_id, client_id, order_id, review_timestamp, entity_id, entity_type, description, photo_url, rating
+        review_id, client_id, order_id, review_timestamp, entity_id, entity_type, description, rating
       ) values (
-        exts.uuid_generate_v4(),
+        review_id$u,
         cur_client$u,
         order_id$u,
         order_ts$t + interval '1 hour',
         cur_rest$u,
         enums_review_type$c[2],
         'отличный ресторан!',
-        null,
         (4.0 + (j$i % 2))
+      );
+    end if;
+
+    -- фото к отзыву (0..2 фото, BR-9.3)
+    if j$i % 3 = 0 then
+      insert into review_photo (review_photo_id, review_id, photo_url)
+      values (
+        exts.uuid_generate_v4(),
+        review_id$u,
+        'https://foodexpress.ru/reviews/' || md5(random()::text) || '_1.jpg'
+      );
+      insert into review_photo (review_photo_id, review_id, photo_url)
+      values (
+        exts.uuid_generate_v4(),
+        review_id$u,
+        'https://foodexpress.ru/reviews/' || md5(random()::text) || '_2.jpg'
+      );
+    elsif j$i % 3 = 1 then
+      insert into review_photo (review_photo_id, review_id, photo_url)
+      values (
+        exts.uuid_generate_v4(),
+        review_id$u,
+        'https://foodexpress.ru/reviews/' || md5(random()::text) || '.jpg'
       );
     end if;
   end loop;
@@ -370,7 +398,7 @@ begin
   for i$i in 1..array_length(couriers$u, 1) loop
     courier_id$u := couriers$u[i$i];
     --curr_coef$n := 0.1; -- начальный коэффициент
-	curr_coef$n := (0.1 + ((i$i - 1) % 5) * 0.1)::numeric(3, 1);
+    curr_coef$n := (0.1 + ((i$i - 1) % 5) * 0.1)::numeric(3, 1);
     -- от самого старого месяца к текущему
     for m$i in reverse 5..0 loop
       m_date$d := (date_trunc('month', current_date) - (m$i || ' months')::interval)::date;
@@ -378,9 +406,9 @@ begin
       m_month$i := extract(month from m_date$d)::int;
 
       select coalesce(count(*), 0),
-        	 coalesce(sum(commission), 0)
+             coalesce(sum(commission), 0)
         into deliv_cnt$i, 
-			 comm_sum$n
+             comm_sum$n
         from "order"
        where courier_id = courier_id$u
          and status = enums_order_status$c[4]
@@ -389,8 +417,8 @@ begin
 
       pay_amt$n := round(comm_sum$n * curr_coef$n, 2);
 
-	  insert into courier_pay (year, month, courier_id, amount, coefficient_used)
-	  values (m_year$i, m_month$i, courier_id$u, pay_amt$n, curr_coef$n);
+      insert into courier_pay (year, month, courier_id, amount, coefficient_used)
+      values (m_year$i, m_month$i, courier_id$u, pay_amt$n, curr_coef$n);
 
       -- расчет нового коэффициента на следующий месяц
       /*if deliv_cnt$i <= 150 then

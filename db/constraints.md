@@ -112,7 +112,9 @@ constraint fk_order_client_address foreign key (client_id, address_id) reference
 | address          | house_number                        | length(trim(house_number)) > 0                                      | BR-3.1, BR-11.3 | Номер дома обязателен.                                                                                   |
 | restaurant       | restaurant_name                     | length(trim(restaurant_name)) > 0                                   | BR-4.1, BR-11.3 | Название ресторана обязательно.                                                                          |
 | restaurant       | description                         | length(trim(description)) > 0                                       | BR-4.1, BR-11.3 | Описание ресторана обязательно.                                                                          |
-| restaurant       | company_details                     | length(trim(company_details)) > 11                                  | BR-4.1, BR-4.5  | Реквизиты юридического лица обязательны. Минимум 12 символов - только ИНН самозанятого                   |
+| restaurant       | inn                                 | length(trim(inn)) >= 8                                              | BR-4.1, BR-4.5  | ИНН юридического лица обязателен, длина от 8 символов.                                                   |
+| restaurant       | ogrn                                | length(trim(ogrn)) >= 8                                             | BR-4.1, BR-4.5  | ОГРН юридического лица обязателен, длина от 8 символов.                                                  |
+| restaurant       | bank_account                        | length(trim(bank_account)) >= 8                                     | BR-4.1, BR-4.5  | Расчетный счет юридического лица обязателен, длина от 8 символов.                                        |
 | restaurant       | work_start, work_end                | work_end > work_start                                               | BR-4.4          | Время закрытия ресторана позже времени открытия.                                                         |
 | restaurant       | rating                              | rating IS NULL OR (rating >= 0 AND rating <= 5)                     | BR-4.2, BR-9.6  | Рейтинг ресторана находится в диапазоне от 0 до 5, либо NULL при отсутствии отзывов.                     |
 | courier          | fio                                 | length(trim(fio)) > 0                                               | BR-6.1, BR-11.3 | ФИО курьера обязательно.                                                                                 |
@@ -133,6 +135,7 @@ constraint fk_order_client_address foreign key (client_id, address_id) reference
 | order_structure  | quantity                            | quantity > 0                                                        | BR-7.15         | Количество — положительное число. Может быть дробным (например, 0.5 кг), если это имеет смысл для блюда. |
 | payment          | amount                              | amount >= 0                                                         | BR-8.4          | Сумма платежа неотрицательна.                                                                            |
 | review           | rating                              | rating >= 1 AND rating <= 5                                         | BR-9.4          | Рейтинг отзыва — от 1 до 5.                                                                              |
+| review_photo     | photo_url                           | length(trim(photo_url)) > 0                                         | BR-9.3, BR-11.3 | Ссылка на фото отзыва не может быть пустой строкой.                                                      |
 
 
 
@@ -145,6 +148,9 @@ constraint fk_order_client_address foreign key (client_id, address_id) reference
 | client | login | BR-2.2 | Логин уникален. |
 | client | phone_number | BR-2.2 | Телефон уникален. |
 | restaurant | address_id | BR-3.3 | Два разных ресторана не могут делить один физический адрес. |
+| restaurant | inn | BR-4.5 | ИНН юрлица уникален. |
+| restaurant | ogrn | BR-4.5 | ОГРН юрлица уникален. |
+| restaurant | bank_account | BR-4.5 | Расчетный счет юрлица уникален. |
 | courier | phone_number |  | Не может быть 2 курьеров с одним телефоном. |
 | product_category | product_category_name |  | Не может быть 2 одинаковых категорий в справочнике. |
 | order_structure | (order_id, product_id) (PK) | BR-7.16 | Одно и то же блюдо не может встречаться в заказе дважды. Вместо этого увеличивается количество. |
@@ -153,6 +159,7 @@ constraint fk_order_client_address foreign key (client_id, address_id) reference
 | payment | transaction_id | BR-8.3 | Идентификатор финансовой транзакции — внешний, приходит от платёжного провайдера. Уникален. |
 | payment | order_id (WHERE status = 'успех') | BR-8.1 | У заказа может быть несколько попыток оплаты. Ровно одна из них — успешная. |
 | review | (order_id, entity_type, entity_id) | BR-9.5 | В рамках одного заказа клиент может оставить не более одного отзыва на каждый объект. То есть максимум: один на блюдо X, один на блюдо Y, один на ресторан, один на заказ — в сумме до N+2 отзывов, где N — число разных блюд в заказе. |
+| review_photo | (review_id, photo_url) | BR-9.3 | Одно и то же фото нельзя прикрепить к отзыву дважды. |
 
 Если UNIQUE частичный (с `WHERE`) — укажи условие в столбце «Столбцы» или отдельной строкой.
 
@@ -178,6 +185,7 @@ constraint fk_order_client_address foreign key (client_id, address_id) reference
 | payment | order_id | "order"(order_id) |  | Заказ существует. |
 | review | client_id | client(client_id) |  | Клиент существет. |
 | review | order_id | "order"(order_id) |  | Заказ существует. |
+| review_photo | review_id | review(review_id) | BR-9.3 | Фотография привязана к отзыву (ON DELETE CASCADE). |
 
 
 ---
@@ -200,6 +208,8 @@ constraint fk_order_client_address foreign key (client_id, address_id) reference
 | restaurant | restaurant_name |  | Название ресторана обязательно для отображения. |
 | restaurant | work_start |  | График работы обязателен, чтобы не принимать заказы в нерабочее время. |
 | restaurant | work_end |  | График работы обязателен, чтобы не принимать заказы в нерабочее время. |
+| restaurant | inn, ogrn, bank_account | BR-4.5 | Реквизиты юрлица обязательны для ведения деятельности. |
+| review_photo | photo_url | BR-9.3 | Фотография не может быть пустой. |
 | courier | fio |  | ФИО курьера для выплаты зп. |
 | courier | hire_date |  | Дата найма обязательна как минимум для трудовых отношений. |
 | courier | coefficient | | Коэффициент нужен для расчёта зарплаты и по дефолту 0.1. |
@@ -223,7 +233,6 @@ constraint fk_order_client_address foreign key (client_id, address_id) reference
 | product | photo_url | BR-5.6, BR-11.3 | фотография в отзыве или у блюда — может отсутствовать; |
 | "order" | delivery_timestamp | BR-7.12, BR-11.3 | время окончания доставки у заказа, который ещё не доставлен, — отсутствует. |
 | "order" | description | | Комментарий к заказу не обязателен. |
-| review | photo_url | BR-9.3, BR-11.3 | фотография в отзыве или у блюда — может отсутствовать; |
 | review | description |  | Если все понравилось люди часто не пишут текст к отзыву. |
 | payment | transaction_id | BR-8.2 | При наличном расчете нет обращения в банк. |
 
@@ -259,7 +268,8 @@ constraint fk_order_client_address foreign key (client_id, address_id) reference
 Все атрибуты атомарны и хранятся в отдельных столбцах(1НФ). Все неключевые атрибуты зависят от полного PK (2НФ). Нет транзитивных зависимостей (3НФ).
 
 address - учитывая, что работаем в рамках одного города, нет смысла создавать таблицу улиц и нарушения 3НФ тут нет. Чтобы не было ошибок при ручном вводе улиц, я бы отвел для улиц отдельную таблицу, но, похоже, это сломает тест C.5 `-- и аналогично для других varchar-полей с NOT NULL`, т.к. в erd строковое поле улицы задано именно в таблице address
-restaurant.company_details - судя по BR-4.5 должно быть общим полем, но по логике я бы разделил на отдельные ИНН, ОГРН и р/с
+restaurant: реквизиты company_details разбиты на отдельные столбцы inn, ogrn, bank_account.
+review_photo: фотографии отзывов вынесены в отдельную таблицу для хранения нескольких фото.
 
 Особые случаи:
 - order.commission = 10% от order_amount — вычисляемое через `GENERATED ALWAYS AS`. Обоснование приведено в выше.

@@ -40,16 +40,23 @@ create table restaurant (
     description text not null,
     work_start time not null,
     work_end time not null,
-    company_details text not null,
+    inn varchar(12) not null,
+    ogrn varchar(15) not null,
+    bank_account varchar(20) not null,
     rating numeric(3, 2),
     status restaurant_status not null default 'активен'
 );
 alter table restaurant add constraint pk_restaurant primary key (restaurant_id);
 alter table restaurant add constraint uq_restaurant_address unique (address_id);
+alter table restaurant add constraint uq_restaurant_inn unique (inn);
+alter table restaurant add constraint uq_restaurant_ogrn unique (ogrn);
+alter table restaurant add constraint uq_restaurant_bank_account unique (bank_account);
 alter table restaurant add constraint fk_restaurant_address foreign key (address_id) references address (address_id);
 alter table restaurant add constraint chk_restaurant_name_not_empty check (length(trim(restaurant_name)) > 0);
-alter table restaurant  add constraint chk_restaurant_desc_not_empty check (length(trim(description)) > 0);
-alter table restaurant add constraint chk_restaurant_details_not_empty check (length(trim(company_details)) > 11);
+alter table restaurant add constraint chk_restaurant_desc_not_empty check (length(trim(description)) > 0);
+alter table restaurant add constraint chk_restaurant_inn_min_len check (length(trim(inn)) >= 8);
+alter table restaurant add constraint chk_restaurant_ogrn_min_len check (length(trim(ogrn)) >= 8);
+alter table restaurant add constraint chk_restaurant_bank_account_min_len check (length(trim(bank_account)) >= 8);
 alter table restaurant add constraint chk_restaurant_work_hours check (work_end > work_start);
 alter table restaurant add constraint chk_restaurant_rating check (rating is null or (rating >= 0 and rating <= 5));
 
@@ -176,15 +183,26 @@ create table review (
     entity_id uuid not null,
     entity_type review_entity_type not null,
     description text,
-    photo_url text,
     rating numeric(2, 1) not null
 );
 alter table review add constraint pk_review primary key (review_id);
 alter table review  add constraint uq_review_order_entity unique (order_id, entity_type, entity_id);
 alter table review add constraint fk_review_client 
-		foreign key (client_id) references client (client_id) on delete cascade;
+    foreign key (client_id) references client (client_id) on delete cascade;
 alter table review add constraint fk_review_order 
-		foreign key (order_id)  references "order" (order_id) on delete cascade;
+    foreign key (order_id) references "order" (order_id) on delete cascade;
 alter table review add constraint chk_review_rating_range check (rating >= 1 and rating <= 5);
+
+-----------
+create table review_photo (
+    review_photo_id uuid not null default exts.uuid_generate_v4(),
+    review_id uuid not null,
+    photo_url text not null
+);
+alter table review_photo add constraint pk_review_photo primary key (review_photo_id);
+alter table review_photo add constraint uq_review_photo unique (review_id, photo_url);
+alter table review_photo add constraint fk_review_photo_review 
+    foreign key (review_id) references review (review_id) on delete cascade;
+alter table review_photo add constraint chk_review_photo_url_not_empty check (length(trim(photo_url)) > 0);
 
 

@@ -625,6 +625,15 @@ SELECT privilege_type FROM information_schema.role_schema_grants
 WHERE grantee = 'inspector' AND schema_name = '<фамилия>_food';
 ```
 
+```sql
+SELECT  
+nspname AS schema_name,  
+has_schema_privilege('inspector', nspname, 'USAGE') AS usage,  
+has_schema_privilege('inspector', nspname, 'CREATE') AS create  
+FROM pg_namespace  
+WHERE nspname = '<фамилия>_food';
+```
+
 Ожидается: `USAGE`, `CREATE` (полный доступ).
 Факт: ___
 
