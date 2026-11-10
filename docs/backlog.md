@@ -180,12 +180,12 @@
 
 **AC:**
 
-- [ ] В `db/schema/grants.sql` — скрипт создания пользователя `inspector` с паролем `NetoSQL2025`.
-- [ ] Ему выдано `ALL PRIVILEGES` на схему `<фамилия>_food`.
-- [ ] Ему выдано `USAGE` на `information_schema` и `pg_catalog` (по умолчанию есть у всех, явно проверь, что не отозвано).
-- [ ] Ему выдано `USAGE` на `exts` (для `uuid_generate_v4`).
-- [ ] Под `inspector` работают: `insert_test_data(10)`, `erase_test_data()`, `add_product(...)`, `get_statistic()`, `courier_salary()`, `SELECT * FROM how_much_money`.
-- [ ] Под `inspector` работают запросы к `information_schema.tables` и `pg_catalog.pg_tables`.
+- [x] В `db/schema/grants.sql` — скрипт создания пользователя `inspector` с паролем `NetoSQL2025`.
+- [x] Ему выдано `ALL PRIVILEGES` на схему `<фамилия>_food`.
+- [x] Ему выдано `USAGE` на `information_schema` и `pg_catalog` (по умолчанию есть у всех, явно проверь, что не отозвано).
+- [x] Ему выдано `USAGE` на `exts` (для `uuid_generate_v4`).
+- [x] Под `inspector` работают: `insert_test_data(10)`, `erase_test_data()`, `add_product(...)`, `get_statistic()`, `courier_salary()`, `SELECT * FROM how_much_money`.
+- [x] Под `inspector` работают запросы к `information_schema.tables` и `pg_catalog.pg_tables`.
 
 **Проверка:** `psql -U inspector` → все вызовы выше выполняются без `permission denied`.
 

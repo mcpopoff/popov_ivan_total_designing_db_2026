@@ -8,6 +8,7 @@ create sequence if not exists seq_restaurant_num start with 1;
 create sequence if not exists seq_product_num start with 1;
 
 create or replace procedure erase_test_data()
+security definer -- иначе падает ALTER SEQUENCE под инспектором
 as $$
 begin
   truncate table
