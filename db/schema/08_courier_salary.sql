@@ -1,8 +1,8 @@
 create or replace procedure courier_salary()
 as $$
 declare
-  cur_year$i int := extract(year from current_date)::int;
-  cur_month$i int := extract(month from current_date)::int;
+  cur_year$i int := extract(year from current_date);
+  cur_month$i int := extract(month from current_date);
   c_rec record;
   deliv_cnt$i int;
   comm_sum$n numeric;

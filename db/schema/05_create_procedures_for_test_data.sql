@@ -398,12 +398,12 @@ begin
   for i$i in 1..array_length(couriers$u, 1) loop
     courier_id$u := couriers$u[i$i];
     --curr_coef$n := 0.1; -- начальный коэффициент
-    curr_coef$n := (0.1 + ((i$i - 1) % 5) * 0.1)::numeric(3, 1);
+    curr_coef$n := (0.1 + ((i$i - 1) % 5) * 0.1);
     -- от самого старого месяца к текущему
     for m$i in reverse 5..0 loop
-      m_date$d := (date_trunc('month', current_date) - (m$i || ' months')::interval)::date;
-      m_year$i := extract(year from m_date$d)::int;
-      m_month$i := extract(month from m_date$d)::int;
+      m_date$d := date_trunc('month', current_date) - (m$i || ' months')::interval;
+      m_year$i := extract(year from m_date$d);
+      m_month$i := extract(month from m_date$d);
 
       select coalesce(count(*), 0),
              coalesce(sum(commission), 0)
