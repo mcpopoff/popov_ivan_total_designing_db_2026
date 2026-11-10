@@ -192,6 +192,7 @@ alter table review add constraint fk_review_client
 alter table review add constraint fk_review_order 
     foreign key (order_id) references "order" (order_id) on delete cascade;
 alter table review add constraint chk_review_rating_range check (rating >= 1 and rating <= 5);
+create index idx_review_entity on review (entity_type, entity_id);
 
 -----------
 create table review_photo (

@@ -60,8 +60,10 @@ declare
   rest_addrs$u uuid[] := array[]::uuid[];
   client_addrs$u uuid[] := array[]::uuid[];
 
-  prod_ids$u uuid[];
-  prod_prices$n numeric[];
+  rest_dishes1$u uuid[] := array[]::uuid[];
+  rest_dishes2$u uuid[] := array[]::uuid[];
+  rest_prices1$n numeric[] := array[]::numeric[];
+  rest_prices2$n numeric[] := array[]::numeric[];
 
   order_ts$t timestamp;
   delivery_ts$t timestamp;
@@ -78,16 +80,6 @@ declare
   dish2$u uuid;
   qty1$n numeric(8, 3);
   qty2$n numeric(8, 3);
-
-  comm_sum$n numeric(12, 2);
-  deliv_cnt$i int;
-  curr_coef$n numeric(3, 1);
-  next_coef$n numeric(3, 1);
-  pay_amt$n numeric(12, 2);
-
-  m_date$d date;
-  m_year$i int;
-  m_month$i int;
 
   enums_courier_status$c courier_status[] := enum_range(null::courier_status);
   enums_product_status$c product_status[] := enum_range(null::product_status);
@@ -243,6 +235,13 @@ begin
         enums_product_status$c[1],
         'вкусное свежее блюдо'
       );
+      if j$i = 1 then
+        rest_dishes1$u := array_append(rest_dishes1$u, prod_id$u);
+        rest_prices1$n := array_append(rest_prices1$n, 300.00);
+      elsif j$i = 2 then
+        rest_dishes2$u := array_append(rest_dishes2$u, prod_id$u);
+        rest_prices2$n := array_append(rest_prices2$n, 400.00);
+      end if;
     end loop;
   end loop;
 
@@ -258,12 +257,7 @@ begin
     cur_rest$u := restaurants$u[(j$i - 1) % val$i + 1];
     cur_client$u := clients$u[(j$i - 1) % val$i + 1];
 
-    select address_id
-      into cur_addr$u
-      from client_address
-     where client_id = cur_client$u
-     order by address_id
-     limit 1;
+    cur_addr$u := client_addrs$u[((j$i - 1) % val$i) * 4 + 1];
 
     if j$i % 10 != 0 then
       order_status$c := enums_order_status$c[4];
@@ -273,23 +267,12 @@ begin
       delivery_ts$t := null;
     end if;
 
-    select array_agg(product_id), 
-           array_agg(price)
-      into prod_ids$u, 
-           prod_prices$n
-      from (
-        select product_id, price
-          from product
-         where restaurant_id = cur_rest$u
-         order by product_id
-         limit 2
-      ) t;
-
-    dish1$u := prod_ids$u[1];
-    dish2$u := prod_ids$u[2];
+    dish1$u := rest_dishes1$u[(j$i - 1) % val$i + 1];
+    dish2$u := rest_dishes2$u[(j$i - 1) % val$i + 1];
     qty1$n := 2.0;
     qty2$n := 1.0;
-    order_amt$n := round(qty1$n * prod_prices$n[1] + qty2$n * prod_prices$n[2], 2);
+    order_amt$n := round(qty1$n * rest_prices1$n[(j$i - 1) % val$i + 1] + qty2$n * rest_prices2$n[(j$i - 1) % val$i + 1], 2);
+    tot_amt$n := order_amt$n + round(order_amt$n * 0.10, 2);
 
     -- заказ
     insert into "order" (
@@ -307,11 +290,6 @@ begin
       (order_id$u, dish2$u, qty2$n);
 
     -- оплата
-    select total_amount
-      into tot_amt$n
-      from "order"
-     where order_id = order_id$u;
-
     insert into payment (
       payment_id, order_id, payment_type, amount, transaction_, payment_timestamp, status
     ) values (
@@ -395,53 +373,44 @@ begin
          );
 
   -- 9. зарплата курьеров
-  for i$i in 1..array_length(couriers$u, 1) loop
-    courier_id$u := couriers$u[i$i];
-    --curr_coef$n := 0.1; -- начальный коэффициент
-    curr_coef$n := (0.1 + ((i$i - 1) % 5) * 0.1);
-    -- от самого старого месяца к текущему
-    for m$i in reverse 5..0 loop
-      m_date$d := date_trunc('month', current_date) - (m$i || ' months')::interval;
-      m_year$i := extract(year from m_date$d);
-      m_month$i := extract(month from m_date$d);
+  with cur_couriers as (
+    select courier_id,
+           (0.1 + ((ord - 1) % 5) * 0.1) coef
+      from unnest(couriers$u) with ordinality c(courier_id, ord)
+  ),
+  months as (
+    select extract(year from dt) yr,
+           extract(month from dt) mo
+      from (
+        select (date_trunc('month', current_date) - (s || ' months')::interval) dt
+          from generate_series(0, 5) s
+      ) t
+  ),
+  comm_agg as (
+    select courier_id,
+           extract(year from order_timestamp) yr,
+           extract(month from order_timestamp) mo,
+           sum(commission) comm_sum
+      from "order"
+     where status = enums_order_status$c[4]
+       and courier_id = any(couriers$u)
+     group by courier_id, extract(year from order_timestamp), extract(month from order_timestamp)
+  )
+  insert into courier_pay (year, month, courier_id, amount, coefficient_used)
+  select m.yr,
+         m.mo,
+         c.courier_id,
+         round(coalesce(ca.comm_sum, 0) * c.coef, 2),
+         c.coef
+    from cur_couriers c
+    cross join months m
+    left join comm_agg ca on ca.courier_id = c.courier_id and ca.yr = m.yr and ca.mo = m.mo;
 
-      select coalesce(count(*), 0),
-             coalesce(sum(commission), 0)
-        into deliv_cnt$i, 
-             comm_sum$n
-        from "order"
-       where courier_id = courier_id$u
-         and status = enums_order_status$c[4]
-         and extract(year from order_timestamp) = m_year$i
-         and extract(month from order_timestamp) = m_month$i;
-
-      pay_amt$n := round(comm_sum$n * curr_coef$n, 2);
-
-      insert into courier_pay (year, month, courier_id, amount, coefficient_used)
-      values (m_year$i, m_month$i, courier_id$u, pay_amt$n, curr_coef$n);
-
-      -- расчет нового коэффициента на следующий месяц
-      /*if deliv_cnt$i <= 150 then
-        next_coef$n := 0.1;
-      elsif deliv_cnt$i <= 250 then
-        next_coef$n := 0.2;
-      elsif deliv_cnt$i <= 500 then
-        next_coef$n := 0.3;
-      else
-        next_coef$n := 0.5;
-      end if;
-
-      if not exists (select 1 from courier where courier_id = courier_id$u and status = 'уволен') then
-        curr_coef$n := next_coef$n;
-      end if;*/
-    end loop;
-
-    -- обновляем courier.coefficient итоговым коэффициентом на следующий месяц
-    update courier
-       set coefficient = curr_coef$n
-     where courier_id = courier_id$u
-       and status != enums_courier_status$c[4];
-  end loop;
+  update courier
+     set coefficient = (0.1 + ((c.ord - 1) % 5) * 0.1)
+    from unnest(couriers$u) with ordinality c(courier_id, ord)
+   where courier.courier_id = c.courier_id
+     and courier.status != enums_courier_status$c[4];
 end;
 $$ language plpgsql;
 
